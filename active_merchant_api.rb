@@ -123,12 +123,45 @@ class ActiveMerchantApi < Sinatra::Base
     respond hash, version
   end
 
+  #Purchasing a payment is typically done only if you are not authorizing payments before-hand.
+  # If you are authorizing payments, then use the authorize and capture endpoints instead.
   #To make a purchase with a payment, make a request like this
   put '/api/orders/:orderId/payments/:payment_id/purchase' do
     payment_id = params[:payment_id]
     order_id = params[:order_id]
     version = env['api_version']
-    hash = Hash["method" => "purchase","order_id" => order_id, "payment_id" => payment_id]
+
+    ActiveMerchant::Billing::Base.mode = :test
+    gateway = ActiveMerchant::Billing::BraintreeGateway.new({
+      :login => 'demo',
+      :password => 'password'
+    })
+
+    credit_card = ActiveMerchant::Billing::CreditCard.new({
+    :first_name => 'Matt',
+    :last_name => 'Baird',
+    :number => '4111111111111111',
+    :month => '10',
+    :year => (Time.now.year + 1).to_s,
+    :verification_value => '999'
+    })
+
+
+    if credit_card.valid?
+      response = gateway.purchase(100, credit_card)
+      print "(TEST) " if response.test?
+      if response.success?
+        puts "The transaction was successful! The authorization is #{response.authorization}"
+        puts response.to_s
+      else
+        puts "The transaction was unsuccessful because #{response.message}"
+      end
+    else
+      puts "The credit card is invalid"
+    end
+
+    hash = Hash["order_id" => order_id, "payment_id" => payment_id, "amount" => 100, "avs_result" =>  response.avs_result,
+               "response_code" => response.authorization, "message" => response.message,  "test" => response.test]
     respond hash, version
   end
 
