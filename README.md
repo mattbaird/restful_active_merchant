@@ -1,4 +1,4 @@
-restful_active_merchant
+RESTful Active Merchant
 =======================
 
-RESTful, JSON wrapper around active_merchant
+a RESTful, JSON wrapper around active_merchant, so non-ruby clients can consume this wonderful library.
