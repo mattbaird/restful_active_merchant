@@ -37,35 +37,6 @@ class ActiveMerchantApi < Sinatra::Base
       conneg.provide([:json, :xml])
    }
 
-
-	get '/' do
-		'{"greeting":"hello world"}'
-	end
-	get '/hi' do
-		'Hello World!'
-	end
-
-	get '/retail/products' do
-	  version = env['api_version']
-	  respond get_product_data(version), version
-	end
-
-	def get_product_data version
-      # Send requests to the gateway's test servers
-      ActiveMerchant::Billing::Base.mode = :test
-
-      # Create a new credit card object
-      credit_card = JsonCreditCard.new(
-        :number     => '4111111111111111',
-        :month      => '8',
-        :year       => '2009',
-        :first_name => 'Tobias',
-        :last_name  => 'Luetke',
-        :verification_value  => '123'
-      )
-      credit_card.to_hash
-	end
-
 	def respond data, version
       respond_to do |wants|
          wants.json  {
@@ -90,6 +61,97 @@ class ActiveMerchantApi < Sinatra::Base
          headers "Vary" => "Content-Type"
       end
    end
+
+ # here is where the actual methods live
+
+
+  get '/' do
+    '{"greeting":"hello world"}'
+  end
+
+  # Payment Index and Search
+  get '/api/orders/:order_id/payments?:page_number?:per_page?' do
+    order_id = params[:order_id]
+    page_number = params[:page]
+    per_page = params[:per_page]
+    version = env['api_version']
+    hash = Hash["method" => "index","order_id" => order_id, "page_number" => page_number, "per_page" => per_page]
+    respond hash, version
+  end
+
+  #New Payment - gets payment methods
+  get '/api/orders/:order_id/payments/new' do
+    order_id = params[:order_id]
+    version = env['api_version']
+    hash = Hash["method" => "new","order_id" => order_id]
+    respond hash, version
+  end
+
+  #create new payment
+  post '/api/orders/:order_id/payments?:payment_method_id?:amount?' do
+    order_id = params[:order_id]
+    payment_method_id = params[:payment_method_id]
+    amount = params[:amount]
+    version = env['api_version']
+    hash = Hash["method" => "create","order_id" => order_id, "payment_method_id" => payment_method_id, "amount" => amount]
+    respond hash, version
+  end
+
+  #To get information for a particular payment, make a request like this
+  get '/api/orders/:order_id/payments/:payment_id' do
+    payment_id = params[:payment_id]
+    order_id = params[:order_id]
+    version = env['api_version']
+    hash = Hash["method" => "info","order_id" => order_id, "payment_id" => payment_id]
+    respond hash, version
+  end
+
+  #To authorize a payment, make a request like this
+  put '/api/orders/:order_id/payments/:payment_id/authorize' do
+    payment_id = params[:payment_id]
+    order_id = params[:order_id]
+    version = env['api_version']
+    hash = Hash["method" => "authorize","order_id" => order_id, "payment_id" => payment_id]
+    respond hash, version
+  end
+  #To capture a payment, make a request like this
+  put '/api/orders/:order_id/payments/:payment_id/capture' do
+    payment_id = params[:payment_id]
+    order_id = params[:order_id]
+    version = env['api_version']
+    hash = Hash["method" => "capture","order_id" => order_id, "payment_id" => payment_id]
+    respond hash, version
+  end
+
+  #To make a purchase with a payment, make a request like this
+  put '/api/orders/:orderId/payments/:payment_id/purchase' do
+    payment_id = params[:payment_id]
+    order_id = params[:order_id]
+    version = env['api_version']
+    hash = Hash["method" => "purchase","order_id" => order_id, "payment_id" => payment_id]
+    respond hash, version
+  end
+
+
+  #To void a payment, make a request like this
+  put '/api/orders/:order_id/payments/:payment_id/void' do
+    payment_id = params[:payment_id]
+    order_id = params[:order_id]
+    version = env['api_version']
+    hash = Hash["method" => "void","order_id" => order_id, "payment_id" => payment_id]
+    respond hash, version
+  end
+
+  #To credit a payment, make a request like this
+  put '/api/orders/:order_id/payments/:payment_id/credit?:amount?' do
+    payment_id = params[:payment_id]
+    order_id = params[:order_id]
+    amount = params[:amount]
+    version = env['api_version']
+    hash = Hash["method" => "credit", "order_id" => order_id, "payment_id" => payment_id, "amount" => amount]
+    respond hash, version
+  end
+
 end
 
 ActiveMerchantApi.run!
