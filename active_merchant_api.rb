@@ -28,8 +28,8 @@ class ActiveMerchantApi < Sinatra::Base
    use Rack::RestApiVersioning, :default_version => '1'
 
    # Create custom vendor mime type mappings
-   use Rack::ReplaceHttpAccept, /application\/vnd\.mycompany\.myapp-v[0-9]+\+json/ => 'application/json',
-   /application\/vnd\.mycompany\.myapp-v[0-9]+\+xml/  => 'application/xml'
+   use Rack::ReplaceHttpAccept, /application\/vnd\.mattbaird\.activemerchant-v[0-9]+\+json/ => 'application/json',
+   /application\/vnd\.mattbaird\.activemerchant-v[0-9]+\+xml/  => 'application/xml'
 
    # Initalise Conneg
    use(Rack::Conneg) { |conneg|
@@ -70,11 +70,11 @@ class ActiveMerchantApi < Sinatra::Base
       respond_to do |wants|
          wants.json  {
             # Set Content-Type header accordingly
-            content_type "application/vnd.mycompany.myapp-v#{version}+json"
+            content_type "application/vnd.mattbaird.activemerchant-v#{version}+json"
             data.to_json
          }
          wants.xml   {
-            content_type "application/vnd.mycompany.myapp-v#{version}+xml"
+            content_type "application/vnd.mattbaird.activemerchant-v#{version}+xml"
             data.to_xml
          }
          wants.other {
