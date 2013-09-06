@@ -33,3 +33,5 @@ API will include a UI for configuration, and options for data-based mapping to p
 Server will be instrumented with statsd, and include webhook support for key operations.
 
 Noodling on supporting payment queueing, as payment gateways can be slow.
+
+API inspired by http://guides.spreecommerce.com/api/payments.html
