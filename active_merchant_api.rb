@@ -5,6 +5,10 @@ require 'active_merchant'
 require 'json'
 require 'sinatra'
 
+#TODO
+# externalize gateway configuration
+# test mode, tests + failure testing mode
+
 class JsonCreditCard < ActiveMerchant::Billing::CreditCard
 #  def to_json(options={})
  #    {
@@ -37,15 +41,17 @@ class ActiveMerchantApi < Sinatra::Base
       conneg.provide([:json, :xml])
    }
 
-	def respond data, version
+	def respond data, version, http_response=200
       respond_to do |wants|
          wants.json  {
             # Set Content-Type header accordingly
             content_type "application/vnd.mattbaird.activemerchant-v#{version}+json"
+            status http_response
             data.to_json
          }
          wants.xml   {
             content_type "application/vnd.mattbaird.activemerchant-v#{version}+xml"
+            status http_response
             data.to_xml
          }
          wants.other {
@@ -62,6 +68,17 @@ class ActiveMerchantApi < Sinatra::Base
       end
    end
 
+   def get_gateway
+    ActiveMerchant::Billing::Base.mode = :test
+    gateway = ActiveMerchant::Billing::BraintreeGateway.new({
+      :login => 'demo',
+      :password => 'password'
+    })
+   end
+
+    def number
+      "#{Time.now.to_i}-#{rand(1_000_000)}"
+    end
  # here is where the actual methods live
 
 
@@ -75,6 +92,7 @@ class ActiveMerchantApi < Sinatra::Base
     page_number = params[:page]
     per_page = params[:per_page]
     version = env['api_version']
+    gw = get_gateway()
     hash = Hash["method" => "index","order_id" => order_id, "page_number" => page_number, "per_page" => per_page]
     respond hash, version
   end
@@ -111,9 +129,12 @@ class ActiveMerchantApi < Sinatra::Base
     payment_id = params[:payment_id]
     order_id = params[:order_id]
     version = env['api_version']
+    gw = get_gateway()
+    gw.authorize(amount, credit_card, options)
     hash = Hash["method" => "authorize","order_id" => order_id, "payment_id" => payment_id]
     respond hash, version
   end
+
   #To capture a payment, make a request like this
   put '/api/orders/:order_id/payments/:payment_id/capture' do
     payment_id = params[:payment_id]
@@ -126,43 +147,42 @@ class ActiveMerchantApi < Sinatra::Base
   #Purchasing a payment is typically done only if you are not authorizing payments before-hand.
   # If you are authorizing payments, then use the authorize and capture endpoints instead.
   #To make a purchase with a payment, make a request like this
-  put '/api/orders/:orderId/payments/:payment_id/purchase' do
+  put '/api/orders/:order_id/payments/:payment_id/purchase' do
     payment_id = params[:payment_id]
     order_id = params[:order_id]
     version = env['api_version']
-
-    ActiveMerchant::Billing::Base.mode = :test
-    gateway = ActiveMerchant::Billing::BraintreeGateway.new({
-      :login => 'demo',
-      :password => 'password'
-    })
-
+    cc_from_body = request.body.read
+    gw = get_gateway()
+    # pull credit card info from body
+    hashed_cc = JSON.parse(cc_from_body)
+    puts cc_from_body
     credit_card = ActiveMerchant::Billing::CreditCard.new({
-    :first_name => 'Matt',
-    :last_name => 'Baird',
-    :number => '4111111111111111',
-    :month => '10',
-    :year => (Time.now.year + 1).to_s,
-    :verification_value => '999'
+    :first_name => hashed_cc["first_name"],
+    :last_name => hashed_cc["last_name"],
+    :number => hashed_cc["number"],
+    :month => hashed_cc["month"],
+    :year => hashed_cc["year"],
+    :verification_value => hashed_cc["verification_value"]
     })
 
-
+    #TODO: add support for additional data such as street_match and postal_match
+    # order_id, ip, customer, invoice, merchant, description, email, currency, billing_address, shipping_address
+    # 
     if credit_card.valid?
-      response = gateway.purchase(100, credit_card)
+      response = gw.purchase(100, credit_card)
       print "(TEST) " if response.test?
       if response.success?
-        puts "The transaction was successful! The authorization is #{response.authorization}"
-        puts response.to_s
+        hash = Hash["order_id" => order_id, "payment_id" => payment_id, "amount" => 100, "avs_result" =>  response.avs_result,
+                   "response_code" => response.authorization, "message" => response.message,  "test" => response.test]
+        respond hash, version
       else
-        puts "The transaction was unsuccessful because #{response.message}"
+        hash = Hash["error" => "There was a problem with the payment gateway: [#{response.message}]"]
+        respond hash, version, 422
       end
     else
-      puts "The credit card is invalid"
+        hash = Hash["error" => "The credit card is invalid."]
+        respond hash, version, 422
     end
-
-    hash = Hash["order_id" => order_id, "payment_id" => payment_id, "amount" => 100, "avs_result" =>  response.avs_result,
-               "response_code" => response.authorization, "message" => response.message,  "test" => response.test]
-    respond hash, version
   end
 
 
