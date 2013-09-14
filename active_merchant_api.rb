@@ -4,10 +4,13 @@ require 'rack/rest_api_versioning'
 require 'active_merchant'
 require 'json'
 require 'sinatra'
+require 'yaml'
 
 #TODO
 # externalize gateway configuration
 # test mode, tests + failure testing mode
+
+APP_CONFIG = YAML.load_file("config/config.yaml")
 
 class JsonCreditCard < ActiveMerchant::Billing::CreditCard
 #  def to_json(options={})
@@ -68,20 +71,13 @@ class ActiveMerchantApi < Sinatra::Base
       end
    end
 
-   def get_gateway
-    ActiveMerchant::Billing::Base.mode = :test
-    gateway = ActiveMerchant::Billing::BraintreeGateway.new({
-      :login => 'demo',
-      :password => 'password'
-    })
-   end
+  require_relative "config/gateway_config_#{APP_CONFIG['environment']}"
 
-    def number
-      "#{Time.now.to_i}-#{rand(1_000_000)}"
-    end
- # here is where the actual methods live
+  def number
+    "#{Time.now.to_i}-#{rand(1_000_000)}"
+  end
 
-
+  # here is where the actual methods live
   get '/' do
     '{"greeting":"hello world"}'
   end
@@ -120,6 +116,8 @@ class ActiveMerchantApi < Sinatra::Base
     payment_id = params[:payment_id]
     order_id = params[:order_id]
     version = env['api_version']
+    gw = get_gateway()
+
     hash = Hash["method" => "info","order_id" => order_id, "payment_id" => payment_id]
     respond hash, version
   end
@@ -155,7 +153,7 @@ class ActiveMerchantApi < Sinatra::Base
     gw = get_gateway()
     # pull credit card info from body
     hashed_cc = JSON.parse(cc_from_body)
-    puts cc_from_body
+    # TODO: error checking on cc_from_body
     credit_card = ActiveMerchant::Billing::CreditCard.new({
     :first_name => hashed_cc["first_name"],
     :last_name => hashed_cc["last_name"],
@@ -165,9 +163,8 @@ class ActiveMerchantApi < Sinatra::Base
     :verification_value => hashed_cc["verification_value"]
     })
 
-    #TODO: add support for additional data such as street_match and postal_match
+    # TODO: add support for additional data such as street_match and postal_match
     # order_id, ip, customer, invoice, merchant, description, email, currency, billing_address, shipping_address
-    # 
     if credit_card.valid?
       response = gw.purchase(100, credit_card)
       print "(TEST) " if response.test?
@@ -191,6 +188,19 @@ class ActiveMerchantApi < Sinatra::Base
     payment_id = params[:payment_id]
     order_id = params[:order_id]
     version = env['api_version']
+    gw = get_gateway()
+    # TODO get authorization code for order_id/payment_id
+
+    authorization = ""
+    response = gw.void(authorization)
+    if response.success?
+      hash = Hash["order_id" => order_id, "payment_id" => payment_id, "amount" => response.amount, "avs_result" =>  response.avs_result,
+                 "response_code" => response.authorization, "message" => response.message,  "test" => response.test]
+      respond hash, version
+    else
+      hash = Hash["error" => "There was a problem with the payment gateway: [#{response.message}]"]
+      respond hash, version, 422
+    end
     hash = Hash["method" => "void","order_id" => order_id, "payment_id" => payment_id]
     respond hash, version
   end
